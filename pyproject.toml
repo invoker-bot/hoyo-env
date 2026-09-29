@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hoyo-env"
-version = "0.1.0"
+version = "0.1.1"
 description = "米哈游游戏版本管理器：安装、切换、启动 hk4e / hkrpg / nap / bh3。下载集中存放，未改动文件不重复占用空间。"
 readme = "README.md"
 requires-python = ">=3.11"

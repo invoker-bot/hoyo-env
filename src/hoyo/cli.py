@@ -10,7 +10,7 @@ from rich.table import Table
 from hoyo import __version__
 from hoyo.catalog import HoyoSource
 from hoyo.config import Settings, config_path, save_data_dir
-from hoyo.errors import HoyoError, LaunchError
+from hoyo.errors import HoyoError, LaunchError, VersionNotFoundError
 from hoyo.games import Game, all_games, require_game
 from hoyo.language import VOICE_LANGS
 from hoyo.launcher import find_executable, open_folder
@@ -37,6 +37,13 @@ GameArg = Annotated[
     ),
 ]
 VersionArg = Annotated[str, typer.Argument(help="版本号，例如 7.1.0")]
+OptionalVersionArg = Annotated[
+    str | None,
+    typer.Argument(
+        metavar="[VERSION]",
+        help="版本号，例如 7.1.0。省略则安装清单中的最新版本",
+    ),
+]
 OptionalGameArg = Annotated[
     str | None,
     typer.Argument(metavar="[GAME]", help="游戏；省略则显示全部"),
@@ -137,7 +144,7 @@ def versions_cmd(game_id: GameArg) -> None:
 def install(
     ctx: typer.Context,
     game_id: GameArg,
-    version: VersionArg,
+    version: OptionalVersionArg = None,
     from_dir: Annotated[
         Path | None,
         typer.Option("--from-dir", exists=True, file_okay=False, help="从本地游戏目录导入"),
@@ -151,15 +158,28 @@ def install(
         typer.Option("--language", "-l", help="同时安装的语音：zh / en / ja / ko"),
     ] = None,
 ) -> None:
-    """安装指定版本到共享仓库，并生成可启动的游戏目录。
+    """安装到共享仓库，并生成可启动的游戏目录。
 
-    例: hoyo install hk4e 7.1.0
+    省略版本号时安装清单里的最新版本。例: hoyo install hk4e
     """
     try:
         game = require_game(game_id)
         with RichReporter(console) as reporter:
             mgr = _manager(ctx.obj["data_dir"], game, downloads=reporter)
-            manifest = mgr.install(version, from_dir=from_dir, channel=channel, language=language)
+            if version is None:
+                if from_dir is not None:
+                    raise HoyoError(
+                        "从本地目录导入时需要写出版本号，"
+                        "例如 hoyo install hk4e 7.1.0 --from-dir <游戏目录>"
+                    )
+                available = list(mgr.source.list_available())
+                if not available:
+                    raise VersionNotFoundError(f"{game.name} 没有可安装版本")
+                version = available[-1]
+                console.print(f"未指定版本，安装最新 {version}")
+            manifest = mgr.install(
+                version, from_dir=from_dir, channel=channel, language=language
+            )
     except HoyoError as exc:
         _handle(exc)
         return

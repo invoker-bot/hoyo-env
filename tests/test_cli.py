@@ -4,6 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from hoyo.cli import app
+from hoyo.models import Manifest
 
 runner = CliRunner()
 
@@ -71,6 +72,50 @@ def test_open_current_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert "已打开" in r.output
     assert "5.3.0" in r.output
     assert opened == [data_dir.resolve() / "hk4e" / "versions" / "current"]
+
+
+def test_install_without_version_uses_latest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[str] = []
+
+    def fake_list(self: object) -> list[str]:
+        return ["1.0.0", "1.9.0", "1.10.0"]
+
+    def fake_install(self: object, version: str, **kwargs: object) -> Manifest:
+        seen.append(version)
+        return Manifest(version=version, game="hk4e")
+
+    monkeypatch.setattr("hoyo.catalog.HoyoSource.list_available", fake_list)
+    monkeypatch.setattr("hoyo.manager.Manager.install", fake_install)
+    r = runner.invoke(app, ["--data-dir", str(tmp_path / "data"), "install", "hk4e"])
+    assert r.exit_code == 0, r.output
+    assert seen == ["1.10.0"]
+    assert "未指定版本，安装最新 1.10.0" in r.output
+
+
+def test_install_from_dir_requires_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_list(self: object) -> list[str]:
+        raise AssertionError("should not query the catalog")
+
+    monkeypatch.setattr("hoyo.catalog.HoyoSource.list_available", fail_list)
+    game = tmp_path / "game"
+    game.mkdir()
+    r = runner.invoke(
+        app,
+        ["--data-dir", str(tmp_path / "data"), "install", "hk4e", "--from-dir", str(game)],
+    )
+    assert r.exit_code == 1
+    assert "需要写出版本号" in r.output
+
+
+def test_install_without_version_and_empty_catalog(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("hoyo.catalog.HoyoSource.list_available", lambda self: [])
+    r = runner.invoke(app, ["--data-dir", str(tmp_path / "data"), "install", "nap"])
+    assert r.exit_code == 1
+    assert "没有可安装版本" in r.output
 
 
 def test_install_unknown_version_fails(tmp_path: Path) -> None:

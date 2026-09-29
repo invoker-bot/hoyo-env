@@ -19,6 +19,7 @@ PyPI 与 GitHub 上的项目名是 [hoyo-env](https://github.com/invoker-bot/hoy
 ```text
 hoyo games
 hoyo versions hk4e
+hoyo install hk4e
 hoyo install hk4e 7.1.0
 hoyo install hkrpg 4.6.0
 hoyo install nap 3.2.0 -l ja
@@ -72,7 +73,7 @@ pip install -e ".[dev]"
 |------|------|
 | `hoyo games` | 列出支持的游戏 |
 | `hoyo versions <game>` | 列出清单中的版本 |
-| `hoyo install <game> <version>` | 拉取缺失文件（含当前语言的语音包，若该游戏有独立语音包）；开始前检查磁盘空间 |
+| `hoyo install <game> [version]` | 拉取缺失文件。省略版本则安装清单中的最新版本；开始前检查磁盘空间 |
 | `hoyo install <game> <version> -l ja` | 安装时指定语音 |
 | `hoyo install <game> <version> --from-dir <path>` | 从本地游戏目录导入 |
 | `hoyo switch <game> <version>` | 把该游戏的当前目录切到该版本 |
