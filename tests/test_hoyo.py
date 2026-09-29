@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 import zstandard
 
 from hoyo.catalog import HoyoSource
+from hoyo.errors import HoyoError
 from hoyo.language import parse_voice_lang
 from hoyo.sophon import parse_manifest_binary
 from hoyo.store import BlobStore, md5_file
@@ -106,6 +108,80 @@ def test_resolve_game_and_voice() -> None:
     assert empty.files == []
     with pytest.raises(Exception, match="没有版本"):
         src.resolve("0.0.0")
+
+
+def _manifest_md5(blob: bytes) -> str:
+    raw = zstandard.ZstdDecompressor().decompress(blob)
+    return hashlib.md5(raw, usedforsecurity=False).hexdigest()
+
+
+def test_parse_manifest_rejects_nested_chunk_as_text() -> None:
+    """A file record decoded as a chunk fails UTF-8 at the size varint.
+
+    hkrpg chunk ids are 49 bytes and the decompressed MD5 is 32 bytes, so the
+    next field starts at offset 85. Compressed size 239683 is encoded as
+    ``c3 d0 0e``; treating that chunk message as UTF-8 dies at byte 86.
+    """
+    nested = _str(1, "i" * 49) + _str(2, "m" * 32) + _var(4, 239683)
+    try:
+        nested.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        assert exc.start == 86
+        assert "invalid continuation" in exc.reason
+    else:
+        raise AssertionError("expected the chunk message itself to be invalid UTF-8")
+    chunk = _str(1, "cid") + _bytes(2, nested) + _var(4, 1) + _var(5, 1)
+    file_msg = _str(1, "GameAssembly.dll") + _bytes(2, chunk) + _var(4, 1) + _str(5, "md")
+    inner = _bytes(1, file_msg)
+    blob = zstandard.ZstdCompressor().compress(inner)
+    with pytest.raises(HoyoError, match="无法解析"):
+        parse_manifest_binary(blob, len(inner))
+
+
+def test_truncated_manifest_raises_hoyo_error() -> None:
+    blob, _uncompressed = encode_sophon_manifest("a.bin", "cid", b"xyz")
+    raw = zstandard.ZstdDecompressor().decompress(blob)
+    cut = raw[:20]
+    broken = zstandard.ZstdCompressor().compress(cut)
+    with pytest.raises(HoyoError, match="无法解析"):
+        parse_manifest_binary(broken, len(cut))
+
+
+def test_corrupt_sophon_cache_is_replaced(tmp_path: Path) -> None:
+    blob, uncompressed = encode_sophon_manifest("StarRail.exe", "cid", b"xyz")
+    url = "https://example.test/manifest"
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200, content=blob)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    src = HoyoSource(game="hkrpg", cache_dir=tmp_path, client=client)
+    cache = tmp_path / "sophon" / "mid"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"not-a-manifest")
+    parsed = src._load_sophon("mid", url, uncompressed, len(blob), _manifest_md5(blob))
+    assert parsed.by_path["StarRail.exe"].chunks[0].id == "cid"
+    assert cache.read_bytes() == blob
+    assert seen == [url]
+    client.close()
+
+
+def test_valid_sophon_cache_skips_download(tmp_path: Path) -> None:
+    blob, uncompressed = encode_sophon_manifest("StarRail.exe", "cid", b"xyz")
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("valid cache should not be downloaded again")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    src = HoyoSource(game="hkrpg", cache_dir=tmp_path, client=client)
+    cache = tmp_path / "sophon" / "mid"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(blob)
+    parsed = src._load_sophon("mid", "https://example.test/manifest", uncompressed, len(blob))
+    assert parsed.by_path["StarRail.exe"].chunks[0].id == "cid"
+    client.close()
 
 
 def test_parse_manifest_and_md5_index(tmp_path: Path) -> None:

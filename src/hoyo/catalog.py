@@ -258,18 +258,42 @@ class HoyoSource:
             man = item["manifest"]
             man_url = f"{item['manifest_download']['url_prefix'].rstrip('/')}/{man['id']}"
             uncompressed = int(man["uncompressed_size"])
-            parsed = self._load_sophon(man["id"], man_url, uncompressed)
+            compressed = int(man["compressed_size"])
+            checksum = str(man.get("checksum") or "") or None
+            parsed = self._load_sophon(
+                man["id"], man_url, uncompressed, compressed, checksum
+            )
             for file in parsed.files:
                 self._chunk_files[(version + ":" + matching, file.path)] = (file, prefix)
 
-    def _load_sophon(self, manifest_id: str, url: str, uncompressed: int) -> Any:
+    def _load_sophon(
+        self,
+        manifest_id: str,
+        url: str,
+        uncompressed: int,
+        compressed: int | None = None,
+        checksum: str | None = None,
+    ) -> Any:
+        def parse(blob: bytes) -> Any:
+            if compressed and len(blob) != compressed:
+                raise HoyoError(
+                    f"Sophon 清单压缩大小不符: 得到 {len(blob)}，期望 {compressed}"
+                )
+            return parse_manifest_binary(blob, uncompressed, checksum=checksum)
+
         cache: Path | None = None
         if self.cache_dir is not None:
             cache = self.cache_dir / "sophon" / manifest_id
             if cache.is_file():
-                return parse_manifest_binary(cache.read_bytes(), uncompressed)
+                try:
+                    return parse(cache.read_bytes())
+                except HoyoError:
+                    cache.unlink(missing_ok=True)
         data = self._get_bytes(url)
+        parsed = parse(data)
         if cache is not None:
             cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_bytes(data)
-        return parse_manifest_binary(data, uncompressed)
+            temporary = cache.with_name(cache.name + ".part")
+            temporary.write_bytes(data)
+            temporary.replace(cache)
+        return parsed
