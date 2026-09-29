@@ -3,13 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hoyo"
+name = "hoyo-env"
 version = "0.1.0"
 description = "米哈游游戏版本管理器：安装、切换、启动 hk4e / hkrpg / nap / bh3。下载集中存放，未改动文件不重复占用空间。"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-keywords = ["hoyo", "mihoyo", "hk4e", "hkrpg", "nap", "bh3", "genshin", "version-manager", "cli"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Qingrui Hu", email = "invoker-bot@outlook.com" }]
+keywords = ["hoyo", "hoyo-env", "mihoyo", "hk4e", "hkrpg", "nap", "bh3", "genshin", "version-manager", "cli"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -38,8 +40,16 @@ dev = [
     "ruff>=0.6",
 ]
 
+[project.urls]
+Homepage = "https://github.com/invoker-bot/hoyo-env"
+Repository = "https://github.com/invoker-bot/hoyo-env"
+Issues = "https://github.com/invoker-bot/hoyo-env/issues"
+
 [project.scripts]
 hoyo = "hoyo.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hoyo"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

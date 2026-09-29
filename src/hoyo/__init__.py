@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("hoyo")
+    __version__ = version("hoyo-env")
 except PackageNotFoundError:  # pragma: no cover - editable/uninstalled fallback
     __version__ = "0.1.0"
 

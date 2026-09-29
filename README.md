@@ -1,5 +1,7 @@
 # hoyo
 
+PyPI 与 GitHub 上的项目名是 [hoyo-env](https://github.com/invoker-bot/hoyo-env)。`pip install hoyo-env` 之后，命令仍是 `hoyo`。
+
 米哈游 PC 游戏版本管理 CLI。支持：
 
 | ID | 游戏 | 别名 | 语音 |
@@ -37,15 +39,31 @@ hoyo open hk4e
 - **进度条**：Rich 显示总体/单文件进度、速度、剩余时间
 - **并发**：默认同时下 4 个文件（asyncio + httpx），HTTP 连接上限 8。可用 `HOYO_FILE_CONCURRENCY` / `HOYO_HTTP_CONCURRENCY` 调整
 
-原神会写入 `audio_lang_*`，并在 Windows 上更新注册表里的 `deviceVoiceLanguageType` / `deviceLanguageType`。绝区零会下载对应语音文件，但不会改注册表。星穹铁道和崩坏3的语音在本体清单里，没有单独的 `Audio_*_pkg_version`。
+原神会写入 `audio_lang_*`，并在 Windows 上更新注册表里的 `deviceVoiceLanguageType` / `deviceLanguageType`。绝区零会另下所选语言的 `Audio_*_pkg_version`，但不会改注册表。星穹铁道和崩坏3没有这份独立语音清单。
+
+## 清单没有覆盖的资源
+
+`hoyo install` 只下载 `pkg_version` 里的文件；原神和绝区零再加所选语言的 `Audio_*_pkg_version`。这是国服安装包的一份快照，不是游戏进程之后还会向服务器请求的全部文件。装完以后，下面没进清单的分类，以及快照之后服务器上新增的热更，仍可能要由游戏自己去下。
+
+对照示例版本（原神 7.1.0、星穹铁道 4.6.0、绝区零 3.2.0、崩坏3 9.1.0）的 Sophon 分类：
+
+- **原神、星穹铁道的游戏资源**，以及**绝区零**清单里另列的主线、场景、活动、口型等分类，都已经写在 `pkg_version` 里，会一起下载。和对应 Sophon 分类相比，通常只少清单文件 `pkg_version` 自己。
+- **崩坏3的 AssetBundle 不在包里。** `pkg_version` 只是约 1.6 GB 的客户端。正文在另一个分类 `asb`（约 34 GB，`BH3_Data/StreamingAssets/Asb/`），当前不会下载。第一次启动需要让游戏向服务器拉取。
+- **星穹铁道的外置语音不在包里。** `Persistent/Audio/.../External*.pck` 属于 Sophon 的 `zh-cn` 等分类，不在本体 `pkg_version` 里，也没有 `Audio_*_pkg_version`。本体里已有的音频银行会下载；这套外置语音不会。进入游戏后仍可能向服务器下载。
 
 ## 安装
 
 需要 Python 3.11+。
 
 ```powershell
-pip install -e ".[dev]"
+pip install hoyo-env
 hoyo --help
+```
+
+从本仓库开发：
+
+```powershell
+pip install -e ".[dev]"
 ```
 
 ## 命令
